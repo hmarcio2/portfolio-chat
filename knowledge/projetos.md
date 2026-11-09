@@ -2,7 +2,7 @@
 
 Heriberto Márcio · Engenheiro de IA · catálogo e planejamento dos projetos.
 
-**Estado em novembro de 2026:** os projetos 00 (chat), 01 (recomendador de filmes) e 02 (agente de planilhas) estão implementados e testados localmente, cada um em repositório próprio com Docker e CI/CD preparados; ainda não estão publicados numa VPS. Os demais projetos (03 a 16) estão **planejados e ainda não existem**.
+**Estado em novembro de 2026:** os projetos 00 (chat), 01 (recomendador de filmes) e 02 (agente de planilhas) estão implementados e testados localmente, cada um em repositório próprio (público no GitHub, licença MIT) com Docker e CI/CD preparados; ainda não estão no ar numa VPS, então não há demo pública. Os demais projetos (03 a 16) estão **planejados e ainda não existem**.
 
 ## 1. Como o currículo orienta a escolha
 
