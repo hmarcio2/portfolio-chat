@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traces do chat do portfólio</title>
+<style>
+  :root {
+    --bg: #ffffff; --surface: #f5f7fa; --text: #1c2430; --muted: #5d6b7c; --line: #dde3ea; --accent: #1a5276;
+    --good: #1e7e4f; --bad: #b3261e; --warn: #9a6700; --bar: #2874a6; --bar-gen: #8e44ad; --bar-ret: #16a085;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #11161d; --surface: #1a212b; --text: #e6ebf1; --muted: #9aa8b8; --line: #2b3542; --accent: #5aa9dc;
+            --good: #4cc38a; --bad: #ff8a80; --warn: #e0b341; --bar: #5aa9dc; --bar-gen: #c39bd3; --bar-ret: #48c9b0; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 20px 16px 8px; max-width: 1200px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0; }
+  .note b { color: var(--text); }
+  main { max-width: 1200px; margin: 0 auto; padding: 8px 16px 48px; display: grid; grid-template-columns: 300px 1fr; gap: 16px; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+  ul.traces { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .traces button { width: 100%; text-align: left; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line);
+                   border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+  .traces button[aria-current="true"] { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+  .q { font-weight: 600; font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .sub { font-size: 12px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+  .pill { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; }
+  .pill.alert { color: var(--bad); border-color: var(--bad); }
+  .pill.good { color: var(--good); border-color: var(--good); }
+  .pill.warn { color: var(--warn); border-color: var(--warn); }
+  section.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+  .meta code { color: var(--text); }
+  .row { display: grid; grid-template-columns: minmax(150px, 230px) 1fr 150px; gap: 10px; align-items: center; padding: 5px 0; border-top: 1px dashed var(--line); font-size: 13px; }
+  .row:first-of-type { border-top: 0; }
+  .name { overflow-wrap: anywhere; }
+  .track { position: relative; height: 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; }
+  .bar { position: absolute; top: 1px; bottom: 1px; border-radius: 3px; background: var(--bar); min-width: 3px; }
+  .bar.generation { background: var(--bar-gen); } .bar.retriever { background: var(--bar-ret); }
+  .bar .ttft { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--warn); }
+  .dur { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  details { margin: 2px 0 6px 12px; } summary { cursor: pointer; font-size: 12px; color: var(--accent); }
+  pre { margin: 6px 0; padding: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font-size: 12px;
+        white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 5px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; border-top: 0; }
+  .legend { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin: 0 4px 0 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Traces do chat do portfólio</h1>
+  <p class="note"><b>Exportados do pipeline real</b> (modelo, busca, notas e feedback), no formato que o Langfuse recebe. <b>Isto não é uma captura da interface do Langfuse</b>: é uma visualização estática, gerada a partir dos spans OpenTelemetry e das notas que o chat envia. <span id="gen"></span></p>
+</header>
+<main>
+  <nav aria-label="Traces"><ul class="traces" id="list"></ul></nav>
+  <div id="detail"></div>
+</main>
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function () {
+  "use strict";
+  var data = JSON.parse(document.getElementById("data").textContent);
+  var ALERT = ["injection_suspect", "pii_in_input", "no_context", "prompt_leak_suspect", "pii_in_output", "knowledge_gap"];
+
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; }
+  function fmt(ms) { return ms >= 1000 ? (ms / 1000).toFixed(2) + " s" : ms.toFixed(0) + " ms"; }
+  function pretty(v) { return typeof v === "string" ? v : JSON.stringify(v, null, 2); }
+  function clip(s, n) { return s.length > n ? s.slice(0, n) + "\n… (" + (s.length - n) + " caracteres a mais)" : s; }
+
+  function flagged(t) {
+    return t.scores.filter(function (s) { return (ALERT.indexOf(s.name) !== -1 && s.value > 0) || (s.name === "unsupported_links" && s.value > 0); });
+  }
+  function feedback(t) { return t.scores.filter(function (s) { return s.name === "user_feedback"; })[0]; }
+  function question(t) { var r = t.observations[0]; return typeof r.input === "string" ? r.input : pretty(r.input); }
+
+  var meta = data.meta || {};
+  document.getElementById("gen").textContent = [meta.generated_at && "Gerado em " + meta.generated_at, meta.provider && "provedor: " + meta.provider,
+    meta.model && "modelo: " + meta.model].filter(Boolean).join(" · ");
+
+  var list = document.getElementById("list"), detail = document.getElementById("detail"), buttons = [];
+
+  data.traces.forEach(function (t, i) {
+    var li = el("li"), b = el("button"); b.type = "button";
+    b.appendChild(el("div", "q", question(t)));
+    var sub = el("div", "sub");
+    sub.appendChild(el("span", null, fmt(t.duration_ms)));
+    var fl = flagged(t);
+    if (fl.length) sub.appendChild(el("span", "pill alert", fl.length + " alerta" + (fl.length > 1 ? "s" : "")));
+    var fb = feedback(t);
+    if (fb) sub.appendChild(el("span", "pill " + (fb.value ? "good" : "alert"), fb.value ? "👍 útil" : "👎 não ajudou"));
+    b.appendChild(sub); li.appendChild(b); list.appendChild(li); buttons.push(b);
+    b.addEventListener("click", function () { show(i); });
+  });
+
+  function depth(t, o) { var d = 0, cur = o, byId = {}; t.observations.forEach(function (x) { byId[x.id] = x; });
+    while (cur.parent_id && byId[cur.parent_id]) { d++; cur = byId[cur.parent_id]; } return d; }
+
+  function show(i) {
+    var t = data.traces[i];
+    buttons.forEach(function (b, j) { b.setAttribute("aria-current", j === i ? "true" : "false"); });
+    detail.textContent = "";
+
+    var head = el("section", "panel");
+    head.appendChild(el("h2", null, "Trace"));
+    var m = el("div", "meta");
+    [["trace", t.trace_id.slice(0, 12) + "…"], ["sessão", (t.session_id || "-").slice(0, 10) + "…"], ["ambiente", t.environment || "-"],
+     ["tags", (t.tags || []).join(", ") || "-"], ["duração", fmt(t.duration_ms)]].forEach(function (kv) {
+      var s = el("span"); s.appendChild(document.createTextNode(kv[0] + ": ")); s.appendChild(el("code", null, kv[1])); m.appendChild(s); });
+    head.appendChild(m); detail.appendChild(head);
+
+    var wf = el("section", "panel");
+    wf.appendChild(el("h2", null, "Linha do tempo (observações)"));
+    var total = Math.max(t.duration_ms, 1);
+    t.observations.forEach(function (o) {
+      var row = el("div", "row");
+      var name = el("div", "name"); name.style.paddingLeft = (depth(t, o) * 14) + "px";
+      name.appendChild(document.createTextNode(o.name + " ")); name.appendChild(el("span", "pill", o.type)); row.appendChild(name);
+      var track = el("div", "track"), bar = el("div", "bar " + o.type);
+      bar.style.left = (o.start_ms / total * 100) + "%"; bar.style.width = (o.duration_ms / total * 100) + "%";
+      if (o.ttft_ms != null && o.duration_ms > 0) { var tt = el("div", "ttft"); tt.style.left = Math.min(100, o.ttft_ms / o.duration_ms * 100) + "%"; tt.title = "primeiro token: " + fmt(o.ttft_ms); bar.appendChild(tt); }
+      track.appendChild(bar); row.appendChild(track);
+      var info = fmt(o.duration_ms);
+      if (o.usage) info += " · " + (o.usage.input || 0) + "→" + (o.usage.output || 0) + " tok";
+      row.appendChild(el("div", "dur", info)); wf.appendChild(row);
+
+      var d = el("details"); d.appendChild(el("summary", null, "entrada, saída e metadados"));
+      [["entrada", o.input], ["saída", o.output], ["metadados", Object.keys(o.metadata || {}).length ? o.metadata : null],
+       ["modelo", o.model ? { modelo: o.model, parametros: o.model_parameters, tokens: o.usage, primeiro_token_ms: o.ttft_ms } : null]].forEach(function (p) {
+        if (p[1] == null) return; d.appendChild(el("div", "sub", p[0])); d.appendChild(el("pre", null, clip(pretty(p[1]), 4000))); });
+      if (o.level) d.appendChild(el("div", "sub", "nível: " + o.level + (o.status_message ? " · " + o.status_message : "")));
+      wf.appendChild(d);
+    });
+    var lg = el("div", "legend");
+    [["bar-ret", "busca"], ["bar-gen", "geração"], ["bar", "trace"]].forEach(function (x) {
+      var i = el("i"); i.style.background = "var(--" + x[0] + ")"; lg.appendChild(i); lg.appendChild(document.createTextNode(x[1])); });
+    var tick = el("i"); tick.style.background = "var(--warn)"; tick.style.width = "3px"; lg.appendChild(tick); lg.appendChild(document.createTextNode("primeiro token"));
+    wf.appendChild(lg); detail.appendChild(wf);
+
+    var sc = el("section", "panel"); sc.appendChild(el("h2", null, "Notas (scores)"));
+    var tbl = el("table"), thead = el("tr");
+    ["nota", "valor", "o que disparou"].forEach(function (h) { thead.appendChild(el("th", null, h)); }); tbl.appendChild(thead);
+    t.scores.forEach(function (s) {
+      var tr = el("tr"); tr.appendChild(el("td", null, s.name));
+      var td = el("td"), bad = (ALERT.indexOf(s.name) !== -1 && s.value > 0) || (s.name === "unsupported_links" && s.value > 0) || (s.name === "user_feedback" && s.value === 0);
+      var good = s.name === "user_feedback" && s.value === 1;
+      td.appendChild(el("span", "pill " + (bad ? "alert" : good ? "good" : ""), s.data_type === "BOOLEAN" ? (s.value ? "sim" : "não") : String(s.value)));
+      tr.appendChild(td); tr.appendChild(el("td", null, s.comment || "")); tbl.appendChild(tr); });
+    sc.appendChild(tbl); detail.appendChild(sc);
+  }
+  if (data.traces.length) show(0);
+})();
+</script>
+</body>
+</html>

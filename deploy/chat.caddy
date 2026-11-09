@@ -1,0 +1,7 @@
+# Rota do chat sob o domínio principal. Instalado em /opt/edge/routes/chat.caddy pelo deploy
+# (o Caddyfile do portfolio-edge importa routes/*.caddy dentro do bloco de {$DOMAIN}).
+handle_path /api/chat/* {
+	reverse_proxy chat:8000 {
+		flush_interval -1
+	}
+}

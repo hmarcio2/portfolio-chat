@@ -1,0 +1,1 @@
+Coloque aqui os prints da interface do Langfuse (veja o passo a passo no README da pasta acima).
